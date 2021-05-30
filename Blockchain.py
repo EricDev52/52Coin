@@ -1,8 +1,8 @@
 import hashlib
 import time
 
-BlockchainDataFilePath = "Python/52Coin/BlockchainData.txt"
-CurrentTransactionsFilePath = "Python/52Coin/CurrentTransactions.txt"
+BlockchainDataFilePath = "BlockchainData/AllBlocks.txt"
+CurrentTransactionsFilePath = "BlockchainData/CurrentTransactions.txt"
 
 class Block:
     def __init__(self, Index, Transactions, PrevHash, Nonce, Timestamp=None):
@@ -31,27 +31,39 @@ class BlockChain:
         self.Nodes.add(Address)
 
     def AddBlock(self, block):
-        self.CurrentTransactions = []
-        self.AllBlocks.append(block)
+        BlockValid = False
+        if (block.Index == 0): BlockValid = self.CheckBlockValidity(block, 0)
+        else: BlockValid = self.CheckBlockValidity(block, self.AllBlocks[-1])
+        if BlockValid:
+            self.CurrentTransactions = []
+            self.AllBlocks.append(block)
+        else: print("Block " + Block.GetString(block) + " is not valid")
         
-    @staticmethod
-    def CheckValidity(block, PrevBlock):
-        if PrevBlock.Index + 1 != block.Index: return False
-        if PrevBlock.CalculateHash != block.PrevHash: return False
-        if not BlockChain.VerifyProof(block): return False
-        if block.Timestamp <= PrevBlock.Timestamp: return False
+    def CheckBlockValidity(self, block, PrevBlock):
+        if not self.VerifyProof(block): print("Block doesnt verifies proof"); return False
+        for Transaction in block.Transactions[:-1]: # Dont check last transaction because its the miner reward
+            Sender = Transaction["Sender"]
+            Recipient = Transaction["Recipient"]
+            Quantity = Transaction["Quantity"]
+            if not BlockChain.CheckTransactionValidity(Sender, Recipient, Quantity): return False
+        if block.Index == 0: return True
+        if PrevBlock.Index + 1 != block.Index: print("Previous block index plus one doesnt match block index"); return False
+        if PrevBlock.CalculateHash() != block.PrevHash: print("Previous block hash doesnt match saved previous block hash"); return False
+        if block.Timestamp <= PrevBlock.Timestamp: print("Block timestamp cant be before previous block timestamp"); return False
         return True
         
     def NewTransaction(self, Sender, Recipient, Quantity):
         if BlockChain.CheckTransactionValidity(Sender, Recipient, Quantity):
             self.CurrentTransactions.append({"Sender": Sender, "Recipient": Recipient, "Quantity": Quantity})
+        else: print("Transaction " + str({"Sender": Sender, "Recipient": Recipient, "Quantity": Quantity}) + " is not valid")
     
     @staticmethod
     def CheckTransactionValidity(Sender, Recipient, Quantity):
-        if not (type(Sender) is str and type(Recipient) is str and (type(Quantity) is float or type(Quantity) is int)): return False
-        if Sender == Recipient: return False
-        if Quantity <= 0: return False
-        if Sender == "Source" or Recipient == "Source": return False
+        if not (type(Sender) is str and type(Recipient) is str and (type(Quantity) is float or type(Quantity) is int)): print("Wrong transaction types"); return False
+        if Sender == Recipient: print("Transaction sender cant be the recipient"); return False
+        if Quantity <= 0: print("Transaction quantity cant be below zero"); return False
+        if Sender == "Source" or Recipient == "Source": print("Transaction sender and recipient cant be 'Source'"); return False
+        if BlockChain.GetUserBalance(Sender) - Quantity < 0: print("Transaction sender doesnt have enough money"); return False
         return True
 
     def ProofOfWork(self, block):
@@ -65,13 +77,32 @@ class BlockChain:
         return Hash.startswith(self.Difficulty * "0")
         
     def BlockMining(self, Miner):
-        if not type(Miner) is str: return
+        if not type(Miner) is str: print("Miner name must be a string"); return
         self.CurrentTransactions.append({"Sender": "Source", "Recipient": Miner, "Quantity": self.MiningReward})
         PrevHash = 0
         if len(self.AllBlocks) > 0: PrevHash = self.AllBlocks[-1].CalculateHash()
         NewBlock = Block(len(self.AllBlocks), self.CurrentTransactions, PrevHash, 0)
         NewBlock = self.ProofOfWork(NewBlock)
         self.AddBlock(NewBlock)
+    
+    @staticmethod
+    def GetAllWallets():
+        Wallets = {}
+        with open(BlockchainDataFilePath, "r") as File: # Load all blocks from the file in the blockchain
+            for Line in File:
+                Transactions = eval(Line.split(" | ")[1].strip("Transactions: "))
+                for Transaction in Transactions:
+                    if Transaction["Sender"] not in Wallets: Wallets[Transaction["Sender"]] = 0
+                    if Transaction["Recipient"] not in Wallets: Wallets[Transaction["Recipient"]] = 0
+                    Wallets[Transaction["Sender"]] -= float(Transaction["Quantity"])
+                    Wallets[Transaction["Recipient"]] += float(Transaction["Quantity"])
+        return Wallets
+
+    @staticmethod
+    def GetUserBalance(User):
+        AllWallets = BlockChain.GetAllWallets()
+        if User in AllWallets: return AllWallets[User]
+        else: return 0
 
     def LoadBlocks(self):
         with open(BlockchainDataFilePath, "r") as File:
