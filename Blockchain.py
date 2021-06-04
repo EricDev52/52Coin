@@ -16,21 +16,17 @@ class Block:
         BlockString = "{}{}{}{}{}".format(self.Index, self.Transactions, self.PrevHash, self.Nonce, self.Timestamp)
         return hashlib.sha256(BlockString.encode()).hexdigest()
     
-    def GetString(self):
+    def GetString(self): # Putting all block information in a string
         return "Index: " + str(self.Index) + " | Transactions: " + str(self.Transactions) + " | PrevHash: " + str(self.PrevHash) + " | Nonce: " + str(self.Nonce) + " | Timestamp: " + str(self.Timestamp) + " | Hash: " + str(self.CalculateHash())
 
 class BlockChain:
     def __init__(self):
         self.AllBlocks = []
         self.CurrentTransactions = []
-        self.Nodes = set()
-        self.Difficulty = 5
-        self.MiningReward = 1
+        self.Difficulty = 5 # The target amount of zeros at the beginning of the block hash
+        self.MiningReward = 1 # The reward in the cryptocurrency for mining a new block
 
-    def CreateNode(self, Address):
-        self.Nodes.add(Address)
-
-    def AddBlock(self, block):
+    def AddBlock(self, block): # Add new block to the blockchain if its valid
         BlockValid = False
         if (block.Index == 0): BlockValid = self.CheckBlockValidity(block, 0)
         else: BlockValid = self.CheckBlockValidity(block, self.AllBlocks[-1])
@@ -52,7 +48,7 @@ class BlockChain:
         if block.Timestamp <= PrevBlock.Timestamp: print("Block timestamp cant be before previous block timestamp"); return False
         return True
         
-    def NewTransaction(self, Sender, Recipient, Quantity):
+    def NewTransaction(self, Sender, Recipient, Quantity): # Add to current (pending) transactions
         if BlockChain.CheckTransactionValidity(Sender, Recipient, Quantity):
             self.CurrentTransactions.append({"Sender": Sender, "Recipient": Recipient, "Quantity": Quantity})
         else: print("Transaction " + str({"Sender": Sender, "Recipient": Recipient, "Quantity": Quantity}) + " is not valid")
@@ -66,13 +62,13 @@ class BlockChain:
         if BlockChain.GetUserBalance(Sender) - Quantity < 0: print("Transaction sender doesnt have enough money"); return False
         return True
 
-    def ProofOfWork(self, block):
+    def ProofOfWork(self, block): # Create a proof of work for the block
         block.Nonce = 0
         while self.VerifyProof(block) == False:
             block.Nonce += 1
         return block
         
-    def VerifyProof(self, block):
+    def VerifyProof(self, block): # Check if the block start with the wanted amount of zeros
         Hash = block.CalculateHash()
         return Hash.startswith(self.Difficulty * "0")
         
@@ -86,9 +82,9 @@ class BlockChain:
         self.AddBlock(NewBlock)
     
     @staticmethod
-    def GetAllWallets():
+    def GetAllWallets(): # Calculate the current balance for all wallets that are mentioned in the transaction
         Wallets = {}
-        with open(BlockchainDataFilePath, "r") as File: # Load all blocks from the file in the blockchain
+        with open(BlockchainDataFilePath, "r") as File:
             for Line in File:
                 Transactions = eval(Line.split(" | ")[1].strip("Transactions: "))
                 for Transaction in Transactions:
@@ -104,7 +100,7 @@ class BlockChain:
         if User in AllWallets: return AllWallets[User]
         else: return 0
 
-    def LoadBlocks(self):
+    def LoadBlocks(self): # Read the blockchain data file and save it into the blockchain all blocks variable
         with open(BlockchainDataFilePath, "r") as File:
             for Line in File:
                 BlockInfo = Line.split(" | ")
@@ -114,19 +110,19 @@ class BlockChain:
                 ReadedBlock = Block(int(BlockInfo[0]), eval(BlockInfo[1]), BlockInfo[2], int(BlockInfo[3]), float(BlockInfo[4]))
                 self.AllBlocks.append(ReadedBlock)
 
-    def SaveBlocks(self):
+    def SaveBlocks(self): # Write all blocks to file
         with open(BlockchainDataFilePath, "w") as File:
             for i in range(len(self.AllBlocks)):
                 File.write(self.AllBlocks[i].GetString() + "\n")
     
-    def LoadCurrentTransactions(self):
+    def LoadCurrentTransactions(self): # Read the current transactions file and save it into the blockchain current transactions variable
         with open(CurrentTransactionsFilePath, "r") as File:
             for Line in File:
                 self.CurrentTransactions.append(eval(Line))
         with open(CurrentTransactionsFilePath, "w") as File:
             File.write("")
 
-    def SaveCurrentTransactions(self):
+    def SaveCurrentTransactions(self): # Write current transactions to file
         with open(CurrentTransactionsFilePath, "w") as File:
             for i in range(len(self.CurrentTransactions)):
                 File.write(str(self.CurrentTransactions[i]) + "\n")
